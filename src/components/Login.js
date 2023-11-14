@@ -1,26 +1,78 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import styled from "styled-components";
 import { createGlobalStyle } from "styled-components";
+import { useDispatch, useSelector, userSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import { selectUserName, selectUserPhoto, setUserLoginDetails } from "../features/user/userSlice";
 import { auth, provider } from "../services/firebase";
 
 const Login = (props) => {
+  const dispatch = useDispatch();
+  const history = useNavigate();
+  const userName = useSelector(selectUserName);
+  const userPhoto = useSelector(selectUserPhoto);
 
-  const [action, setAction] = useState("Sign up");
+  useEffect(() => {
+    auth.onAuthStateChanged(async (user) => {
+      console.log(user);
+      if(user) {
+        setUser(user);
+        history('/');
+      }
+    });
+  }, [userName]); /* this function only runs when userName is changed */
+
+  const [action, setAction] = useState("Login");
   const [formData, setFormData] = useState({
-    name: "",
+    username: "",
     email: "",
     password: ""
   });
+
+  const handleEmailPasswordLogin = () => {
+    auth.signInWithEmailAndPassword(formData.email, formData.password)
+    .then((result) => {
+      setUser(result.user);
+    })
+    .catch((error) => {
+      alert(error.message);
+    });
+  };
+
+  const createAccount = async () => {
+    try {
+      const userCredential = await auth.createUserWithEmailAndPassword(
+        formData.email, 
+        formData.password
+      );
+      await userCredential.user.updateProfile({
+        displayName: formData.username,
+      });
+    } catch(error) {
+      alert(error);
+    }
+  };
 
   const handleAuth = () => {
     /* pop up a Google sign up 
     -> promise a result and log it if successful 
     => if there's an error, alert it*/
-    auth.signInWithPopup(provider).then((result) => {
-      console.log(result)
+    auth.signInWithPopup(provider)
+    .then((result) => {
+      setUser(result.user);
     }).catch((error) => {
-      alert(error.message);
+      console.log(error);
     })
+  };
+
+  const setUser = (user) => {
+    dispatch(
+      setUserLoginDetails({
+        name: user.displayName,
+        email: user.email,
+        photo: user.photoUrl || '/images/default-user-image.svg',
+      })
+    );
   };
 
   const handleInputChange = (field, event) => {
@@ -45,12 +97,14 @@ const Login = (props) => {
           <Underline></Underline>
         </Header>
         <Inputs>
-          {action === "Login" ? <div></div> : 
+        {action === "Sign Up" ?
           <Input>
-            <img src={"/images/user_login.svg"} alt="username" />
-            <input type="text" onChange={(event) => handleInputChange("name", event)} />
-            <Placeholder>Name</Placeholder>
-          </Input>}
+            <img src={"/images/user-login.svg"} alt="user" />
+            <input type="text" onChange={(event) => handleInputChange("username", event)} />
+            <Placeholder>Username</Placeholder>
+          </Input> :
+          <></>
+        }
           <Input>
             <img src={"/images/email.svg"} alt="email" />
             <input type="text" onChange={(event) => handleInputChange("email", event)} />
@@ -67,34 +121,33 @@ const Login = (props) => {
           <span>Forgot Password?</span>
         </ForgotPassword>}
         <SubmitContainer>
-          <Submit gray={action === "Login"} onClick={() => {setAction("Sign up")}}>Sign Up</Submit>
-          <Submit gray={action === "Sign up"} onClick={() => {setAction("Login")}}>Login</Submit>
+          <Submit onClick={action === "Login" ? handleEmailPasswordLogin : createAccount}>{action}</Submit>
         </SubmitContainer>
         <AuthContainer onClick={handleAuth}>
           <img src={"/images/google.svg"} alt="google" />
           <GoogleAuth>
-            {action} with Google
+            Continue with Google
           </GoogleAuth>
         </AuthContainer>
+        <ChangeActionContainer>
+          {action === "Login" ? "Don't" : "Already"} have an account? 
+          <ChangeAction onClick={() => setAction(action === "Login" ? "Sign Up" : "Login")}>
+            {action === "Login" ? "Sign Up" : "Login"}
+          </ChangeAction>
+        </ChangeActionContainer>
       </Border>
     </Container>
   );
 };
 
-const GlobalStyles = createGlobalStyle`
-* {
-  border: 1px solid red;
-}
-`;
-
 const Border = styled.div`
+  position: absolute;
   display: flex;
   flex-direction: column;
   margin: auto;
-  margin-top: 200px;
+  margin-top: 150px;
   border-radius: 20px;
   background: #fff;
-  position: absolute;
   padding-bottom: 30px;
   width: 600px;
   left: 50%;
@@ -205,13 +258,19 @@ const Submit = styled.div`
   width: 220px;
   height: 59px;
   color: #fff;
-  background: ${props => (props.gray ? "#EAEAEA" : "#1C305C")};
-  color: ${props => (props.gray ? "#676767" : "#fff")};
+  background: #EAEAEA;
+  color: #676767;
   border-radius: 50px;
   font-size: 19px;
   font-weight: 700;
   cursor: pointer;
   user-select: none;
+  transition: 0.2s;
+
+  &:hover {
+    background: #1C305C;
+    color: #fff;
+  }
 `;
 
 const AuthContainer = styled.div`
@@ -236,6 +295,15 @@ const GoogleAuth = styled.a`
   font-size: 16px;
   font-weight: 500;
   margin-top: 3px;
+`;
+
+const ChangeActionContainer = styled.div`
+  color: #1C305C;
+`;
+
+const ChangeAction = styled.div`
+  color: #1C305C;
+  cursor: pointer;
 `;
 
 const Container = styled.section`
